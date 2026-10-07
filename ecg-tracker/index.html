@@ -32,14 +32,14 @@
     <div id="balance-box"></div>
     <form id="balance-form" class="inline">
       <label>Date <input type="date" id="b-date" required></label>
-      <label>Units showing on meter (kWh) <input type="number" id="b-units" step="0.01" min="0" required></label>
+      <label id="l-bal">Units showing on meter (kWh) <input type="number" id="b-units" step="0.01" min="0" required></label>
       <button type="submit">Calibrate balance</button>
     </form>
-    <p class="muted">Check your meter every day or two and enter the remaining units it shows. The app works out your usage from the drop between checks (adding any top-ups you logged), so you do not need a total reading.</p>
+    <p id="bal-help" class="muted">Check your meter every day or two and enter the remaining units it shows. The app works out your usage from the drop between checks (adding any top-ups you logged), so you do not need a total reading.</p>
   </section>
 
   <div class="grid">
-    <section class="panel">
+    <section class="panel kwh-only">
       <h2>Add meter reading <span class="muted">(only if your meter shows a total kWh)</span></h2>
       <form id="reading-form">
         <label>Date <input type="date" id="r-date" required></label>
@@ -54,7 +54,7 @@
       <form id="topup-form">
         <label>Date <input type="date" id="t-date" required></label>
         <label>Amount paid (GH₵) <input type="number" id="t-amount" step="0.01" min="0" required></label>
-        <label>Units received (kWh) <input type="number" id="t-units" step="0.01" min="0" required></label>
+        <label id="l-t-units">Units received (kWh) <input type="number" id="t-units" step="0.01" min="0" required></label>
         <button type="submit">Save top-up</button>
       </form>
     </section>
@@ -62,25 +62,26 @@
     <section class="panel">
       <h2>Settings</h2>
       <form id="settings-form">
-        <label>Tariff (GH₵ per kWh) <input type="number" id="s-rate" step="0.0001" min="0" required></label>
-        <label>Monthly service charge (GH₵) <input type="number" id="s-service" step="0.01" min="0" required></label>
+        <label>Meter balance is in <select id="s-unit"><option value="ghs">Cedis (GH₵)</option><option value="kwh">Units (kWh)</option></select></label>
+        <label class="kwh-only">Tariff (GH₵ per kWh) <input type="number" id="s-rate" step="0.0001" min="0" required></label>
+        <label class="kwh-only">Monthly service charge (GH₵) <input type="number" id="s-service" step="0.01" min="0" required></label>
         <label>Monthly budget (GH₵, optional) <input type="number" id="s-budget" step="0.01" min="0"></label>
         <label>Low-balance alert: days left below <input type="number" id="s-alert-days" step="0.5" min="0"></label>
-        <label>…or units left below (kWh, optional) <input type="number" id="s-alert-kwh" step="0.1" min="0"></label>
+        <label id="l-alert-level">Alert when credit falls to (GH₵) <input type="number" id="s-alert-level" step="0.1" min="0"></label>
         <label class="check"><input type="checkbox" id="s-notify"> Also show a phone/browser notification when low</label>
         <button type="submit">Save settings</button>
       </form>
-      <p class="muted">Check the current PURC/ECG tariff for your customer class and enter it here — rates change over time. Costs shown are estimates.</p>
+      <p class="muted kwh-only">Check the current PURC/ECG tariff for your customer class and enter it here — rates change over time. Costs shown are estimates.</p>
     </section>
   </div>
 
   <section class="panel">
     <h2>Monthly summary</h2>
-    <div class="table-wrap"><table id="months"><thead><tr><th>Month</th><th>kWh used</th><th>Est. cost (GH₵)</th></tr></thead><tbody></tbody></table></div>
+    <div class="table-wrap"><table id="months"><thead><tr><th>Month</th><th id="m-h1">kWh used</th><th id="m-h2">Est. cost (GH₵)</th></tr></thead><tbody></tbody></table></div>
   </section>
 
   <div class="grid two">
-    <section class="panel">
+    <section class="panel kwh-only">
       <h2>Readings</h2>
       <div class="table-wrap"><table id="readings"><thead><tr><th>Date</th><th>Reading</th><th>Used since previous</th><th></th></tr></thead><tbody></tbody></table></div>
     </section>

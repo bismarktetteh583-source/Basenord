@@ -2,16 +2,27 @@
   "use strict";
   const KEY = "ecg-tracker-v1";
   const DAY = 86400000;
-  const defaults = { rate: 1.9, service: 0, budget: "", readings: [], topups: [], balances: [], alertDays: 3, alertKwh: "", notify: false, lastAlert: "" };
+  const defaults = { rate: 1.9, service: 0, budget: "", readings: [], topups: [], balances: [], unit: "ghs", alertDays: 3, alertLevel: "", notify: false, lastAlert: "" };
   let state = load();
 
   const $ = (id) => document.getElementById(id);
   const fmt = (n, d = 2) => Number(n).toLocaleString("en-GH", { minimumFractionDigits: d, maximumFractionDigits: d });
   const today = () => new Date().toISOString().slice(0, 10);
+  const isGhs = () => state.unit === "ghs";
+  const qty = (n) => (isGhs() ? `GH₵ ${fmt(n)}` : `${fmt(n)} kWh`);
+  const rate = () => (isGhs() ? 1 : state.rate);
+  const tval = (t) => (isGhs() ? t.amount : t.units);
   const toTime = (s) => new Date(s + "T00:00:00Z").getTime();
 
   function load() {
-    try { return Object.assign({}, defaults, JSON.parse(localStorage.getItem(KEY)) || {}); }
+    try {
+      const saved = JSON.parse(localStorage.getItem(KEY));
+      if (!saved) return Object.assign({}, defaults);
+      // Data saved before cedi mode existed stays in kWh; alertKwh was renamed alertLevel.
+      if (!saved.unit) saved.unit = "kwh";
+      if (saved.alertLevel == null && saved.alertKwh != null) saved.alertLevel = saved.alertKwh;
+      return Object.assign({}, defaults, saved);
+    }
     catch { return Object.assign({}, defaults); }
   }
   function save() {
@@ -31,7 +42,7 @@
     return sorted.map((b, i) => {
       if (!i) return { ...b, used: null, prev: null };
       const prev = sorted[i - 1];
-      const bought = state.topups.filter((t) => t.date > prev.date && t.date <= b.date).reduce((s, t) => s + t.units, 0);
+      const bought = state.topups.filter((t) => t.date > prev.date && t.date <= b.date).reduce((s, t) => s + tval(t), 0);
       return { ...b, prev, used: prev.units + bought - b.units };
     });
   }
@@ -59,7 +70,7 @@
     for (const [d, k] of Object.entries(dailyUsage())) m[d.slice(0, 7)] = (m[d.slice(0, 7)] || 0) + k;
     return m;
   }
-  const monthCost = (kwh) => kwh * state.rate + Number(state.service || 0);
+  const monthCost = (used) => used * rate() + (isGhs() ? 0 : Number(state.service || 0));
 
   function renderStats() {
     const daily = dailyUsage();
@@ -72,17 +83,18 @@
     const budget = Number(state.budget) || 0;
     const cost = mUsed ? monthCost(mUsed) : 0;
     const cards = [
-      ["This month", `${fmt(mUsed)} kWh`, `≈ GH₵ ${fmt(cost)}`],
-      ["Avg / day (last 7)", `${fmt(avg)} kWh`, `≈ GH₵ ${fmt(avg * state.rate)}`],
+      ["This month", qty(mUsed), isGhs() ? "used so far" : `≈ GH₵ ${fmt(cost)}`],
+      ["Avg / day (last 7)", qty(avg), isGhs() ? "last 7 days with data" : `≈ GH₵ ${fmt(avg * rate())}`],
       ["Projected month", `GH₵ ${fmt(avg ? monthCost(avg * 30) : 0)}`, "at current daily average"],
-      ["Latest reading", latest ? fmt(latest.value) : "—", latest ? latest.date : "none yet"],
+      
     ];
+    if (!isGhs()) cards.push(["Latest reading", latest ? fmt(latest.value) : "—", latest ? latest.date : "none yet"]);
     if (budget) {
       const left = budget - cost;
       cards.push(["Budget left", `<span class="${left < 0 ? "over" : "ok"}">GH₵ ${fmt(left)}</span>`, `of GH₵ ${fmt(budget)}`]);
     }
-    const purchased = state.topups.reduce((s, t) => s + t.units, 0);
-    if (state.topups.length) cards.push(["Prepaid bought", `${fmt(purchased)} kWh`, `GH₵ ${fmt(state.topups.reduce((s, t) => s + t.amount, 0))}`]);
+    const purchased = state.topups.reduce((s, t) => s + tval(t), 0);
+    if (state.topups.length) cards.push(["Prepaid bought", qty(purchased), `${state.topups.length} top-up(s)`]);
     $("stats").innerHTML = cards.map(([l, v, n]) => `<div class="card"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${n}</div></div>`).join("");
   }
 
@@ -91,7 +103,7 @@
     if (!state.topups.length && !state.balances.length) return null;
     const check = [...state.balances].sort((x, y) => x.date.localeCompare(y.date)).pop();
     const since = check ? check.date : "";
-    const bought = state.topups.filter((t) => t.date > since).reduce((s, t) => s + t.units, 0);
+    const bought = state.topups.filter((t) => t.date > since).reduce((s, t) => s + tval(t), 0);
     const daily = dailyUsage(), dates = Object.keys(daily).sort();
     const recent = dates.slice(-7);
     const avg = recent.length ? recent.reduce((s, d) => s + daily[d], 0) / recent.length : 0;
@@ -107,10 +119,18 @@
     const p = prepaidBalance();
     if (!p) { $("balance-box").innerHTML = `<p class="muted">Log a top-up or calibrate your meter balance to see your remaining units.</p>`; return; }
     const low = p.balance <= 0 ? "over" : p.daysLeft != null && p.daysLeft < 3 ? "over" : "ok";
+    const level = Number(state.alertLevel) || 0, bal = Math.max(0, p.balance);
+    let third = isGhs() ? ["Alert level", level ? qty(level) : "not set", level ? "needs 2+ checks for a trend" : "set one in Settings"] : ["Value remaining", `GH₵ ${fmt(bal * state.rate)}`, "at your tariff"];
+    if (level && p.avg > 0) {
+      if (bal > level) {
+        const d = (bal - level) / p.avg;
+        third = ["Days to alert", fmt(d, 1), `reaches ${qty(level)} around ${new Date(toTime(today()) + d * DAY).toISOString().slice(0, 10)}`];
+      } else third = ["Alert level", `<span class="over">reached</span>`, `below ${qty(level)}`];
+    }
     const cards = [
-      ["Estimated remaining", `<span class="${low}">${fmt(Math.max(0, p.balance))} kWh</span>`, p.check ? `calibrated ${p.check.date} at ${fmt(p.check.units)} kWh` : "no calibration yet"],
-      ["Days left", p.daysLeft != null ? fmt(p.daysLeft, 1) : "—", p.avg ? `at ${fmt(p.avg)} kWh/day` : "needs 2+ readings"],
-      ["Value remaining", `GH₵ ${fmt(Math.max(0, p.balance) * state.rate)}`, "at your tariff"],
+      ["Estimated remaining", `<span class="${low}">${qty(bal)}</span>`, p.check ? `last check ${p.check.date}: ${qty(p.check.units)}` : "no check yet"],
+      ["Days left", p.daysLeft != null ? fmt(p.daysLeft, 1) : "—", p.avg ? `at ${qty(p.avg)}/day` : "needs 2+ checks"],
+      third,
     ];
     $("balance-box").innerHTML = cards.map(([l, v, n]) => `<div class="card"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${n}</div></div>`).join("");
   }
@@ -118,8 +138,8 @@
   function historyRows() {
     return [
       ...state.readings.map((r) => ({ id: r.id, list: "readings", type: "reading", date: r.date, text: `Meter reading ${fmt(r.value)} kWh` })),
-      ...state.topups.map((t) => ({ id: t.id, list: "topups", type: "topup", date: t.date, text: `Top-up GH₵ ${fmt(t.amount)} → ${fmt(t.units)} kWh` })),
-      ...balanceIntervals().map((b) => ({ id: b.id, list: "balances", type: "balance", date: b.date, text: `Meter balance ${fmt(b.units)} kWh` + (b.used == null ? "" : b.used < 0 ? " (balance went up: missing top-up?)" : ` (used ${fmt(b.used)} kWh since ${b.prev.date})`) })),
+      ...state.topups.map((t) => ({ id: t.id, list: "topups", type: "topup", date: t.date, text: isGhs() || !t.units ? `Top-up GH₵ ${fmt(t.amount)}` : `Top-up GH₵ ${fmt(t.amount)} → ${fmt(t.units)} kWh` })),
+      ...balanceIntervals().map((b) => ({ id: b.id, list: "balances", type: "balance", date: b.date, text: `Meter balance ${qty(b.units)}` + (b.used == null ? "" : b.used < 0 ? " (balance went up: missing top-up?)" : ` (used ${qty(b.used)} since ${b.prev.date})`) })),
     ].sort((x, y) => y.date.localeCompare(x.date));
   }
 
@@ -127,11 +147,12 @@
     const p = prepaidBalance(), box = $("alert");
     let msg = "";
     if (p && state.balances.length + state.topups.length) {
-      const days = Number(state.alertDays) || 0, kwh = Number(state.alertKwh) || 0;
-      const bal = Math.max(0, p.balance);
-      if (p.balance <= 0) msg = "Your prepaid balance is estimated at 0 kWh — top up now.";
-      else if (kwh && bal < kwh) msg = `Low balance: about ${fmt(bal)} kWh left (below your ${fmt(kwh)} kWh alert).`;
-      else if (days && p.daysLeft != null && p.daysLeft < days) msg = `Low balance: about ${fmt(p.daysLeft, 1)} day(s) left at your current usage (${fmt(bal)} kWh). Top up soon.`;
+      const days = Number(state.alertDays) || 0, level = Number(state.alertLevel) || 0;
+      const bal = Math.max(0, p.balance), toLevel = level && p.avg > 0 && bal > level ? (bal - level) / p.avg : null;
+      if (p.balance <= 0) msg = `Your prepaid balance is estimated at ${qty(0)}: top up now.`;
+      else if (level && bal <= level) msg = `Low balance: about ${qty(bal)} left (at or below your ${qty(level)} alert).`;
+      else if (days && toLevel != null && toLevel < days) msg = `Heads up: about ${fmt(toLevel, 1)} day(s) until you reach your ${qty(level)} alert (${qty(bal)} left now).`;
+      else if (days && p.daysLeft != null && p.daysLeft < days) msg = `Low balance: about ${fmt(p.daysLeft, 1)} day(s) left at your current usage (${qty(bal)}). Top up soon.`;
     }
     box.hidden = !msg; box.textContent = msg;
     box.classList.toggle("warn", !!msg && p.balance > 0);
@@ -182,18 +203,33 @@
   function renderTables() {
     const mu = monthlyUsage();
     $("months").tBodies[0].innerHTML = Object.keys(mu).sort().reverse()
-      .map((m) => `<tr><td>${m}</td><td>${fmt(mu[m])}</td><td>${fmt(monthCost(mu[m]))}</td></tr>`).join("") || `<tr><td colspan="3" class="muted">No data yet</td></tr>`;
+      .map((m) => `<tr><td>${m}</td><td>${fmt(mu[m])}</td><td>${isGhs() ? "" : fmt(monthCost(mu[m]))}</td></tr>`).join("") || `<tr><td colspan="3" class="muted">No data yet</td></tr>`;
 
     $("readings").tBodies[0].innerHTML = readingsWithUsage().reverse()
       .map((r) => `<tr><td>${r.date}</td><td>${fmt(r.value)}</td><td>${r.used == null ? "—" : (r.used < 0 ? `<span class="over">${fmt(r.used)}</span>` : fmt(r.used))}</td><td><button class="del" data-del="readings" data-id="${r.id}" title="Delete">✕</button></td></tr>`).join("")
       || `<tr><td colspan="4" class="muted">No readings yet</td></tr>`;
 
     $("topups").tBodies[0].innerHTML = [...state.topups].sort((a, b) => b.date.localeCompare(a.date))
-      .map((t) => `<tr><td>${t.date}</td><td>${fmt(t.amount)}</td><td>${fmt(t.units)}</td><td>${t.units ? fmt(t.amount / t.units, 3) : "—"}</td><td><button class="del" data-del="topups" data-id="${t.id}" title="Delete">✕</button></td></tr>`).join("")
+      .map((t) => `<tr><td>${t.date}</td><td>${fmt(t.amount)}</td><td>${t.units ? fmt(t.units) : "—"}</td><td>${t.units ? fmt(t.amount / t.units, 3) : "—"}</td><td><button class="del" data-del="topups" data-id="${t.id}" title="Delete">✕</button></td></tr>`).join("")
       || `<tr><td colspan="5" class="muted">No top-ups yet</td></tr>`;
   }
 
-  function render() { renderStats(); renderBalance(); renderAlert(); renderChart(); renderTables(); renderHistory(); }
+  // Show only the fields that make sense for the chosen balance unit.
+  function applyMode() {
+    const g = isGhs();
+    document.querySelectorAll(".kwh-only").forEach((el) => { el.hidden = g; });
+    $("t-units").required = !g;
+    $("l-t-units").firstChild.textContent = g ? "Units received (kWh, optional) " : "Units received (kWh) ";
+    $("l-bal").firstChild.textContent = g ? "Remaining credit on meter (GH₵) " : "Units showing on meter (kWh) ";
+    $("l-alert-level").firstChild.textContent = g ? "Alert when credit falls to (GH₵) " : "Alert when units fall to (kWh) ";
+    $("m-h1").textContent = g ? "Credit used (GH₵)" : "kWh used";
+    $("m-h2").textContent = g ? "" : "Est. cost (GH₵)";
+    $("bal-help").textContent = g
+      ? "Every day or two, read the remaining credit on your meter (GHC) and enter it here. The app works out how much you spent from the drop between checks, adding any top-ups you logged, and estimates how many days are left."
+      : "Check your meter every day or two and enter the remaining units it shows. The app works out your usage from the drop between checks (adding any top-ups you logged).";
+  }
+
+  function render() { applyMode(); renderStats(); renderBalance(); renderAlert(); renderChart(); renderTables(); renderHistory(); }
 
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
@@ -206,7 +242,7 @@
   });
   $("topup-form").addEventListener("submit", (e) => {
     e.preventDefault();
-    state.topups.push({ id: uid(), date: $("t-date").value, amount: parseFloat($("t-amount").value), units: parseFloat($("t-units").value) });
+    state.topups.push({ id: uid(), date: $("t-date").value, amount: parseFloat($("t-amount").value), units: parseFloat($("t-units").value) || 0 });
     e.target.reset(); $("t-date").value = today(); save();
   });
   $("balance-form").addEventListener("submit", (e) => {
@@ -234,8 +270,9 @@
   });
   $("settings-form").addEventListener("submit", (e) => {
     e.preventDefault();
-    state.rate = parseFloat($("s-rate").value); state.service = parseFloat($("s-service").value) || 0; state.budget = $("s-budget").value;
-    state.alertDays = $("s-alert-days").value; state.alertKwh = $("s-alert-kwh").value;
+    if ($("s-unit").value !== state.unit && (state.balances.length || state.topups.length) && !confirm("Changing the balance unit makes older balance checks and top-ups mean something different. Continue?")) { $("s-unit").value = state.unit; return; }
+    state.rate = parseFloat($("s-rate").value) || state.rate; state.service = parseFloat($("s-service").value) || 0; state.budget = $("s-budget").value;
+    state.alertDays = $("s-alert-days").value; state.alertLevel = $("s-alert-level").value; state.unit = $("s-unit").value;
     state.notify = $("s-notify").checked;
     if (state.notify && "Notification" in window && Notification.permission === "default") Notification.requestPermission().then(render);
     else if (state.notify && !("Notification" in window)) alert("This browser doesn't support notifications; the in-app banner will still show.");
@@ -258,7 +295,7 @@
     if (confirm("Delete ALL readings, top-ups and settings? This cannot be undone.")) { state = Object.assign({}, defaults, { readings: [], topups: [], balances: [] }); fillSettings(); save(); }
   });
 
-  function fillSettings() { $("s-alert-days").value = state.alertDays; $("s-alert-kwh").value = state.alertKwh; $("s-notify").checked = !!state.notify; $("s-rate").value = state.rate; $("s-service").value = state.service; $("s-budget").value = state.budget; }
+  function fillSettings() { $("s-alert-days").value = state.alertDays; $("s-alert-level").value = state.alertLevel; $("s-unit").value = state.unit; $("s-notify").checked = !!state.notify; $("s-rate").value = state.rate; $("s-service").value = state.service; $("s-budget").value = state.budget; }
   $("r-date").value = $("t-date").value = $("b-date").value = today();
   fillSettings(); render();
   window.addEventListener("resize", renderChart);
