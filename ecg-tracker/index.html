@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ECG Usage Tracker</title>
 <link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#1c2a3a">
 </head>
 <body>
 <header>
@@ -13,6 +17,8 @@
 </header>
 
 <main>
+  <div id="alert" class="alert" role="alert" hidden></div>
+  <div id="offline" class="muted" hidden>Offline — your data is saved on this device.</div>
   <section class="cards" id="stats"></section>
 
   <section class="panel">
@@ -59,6 +65,9 @@
         <label>Tariff (GH₵ per kWh) <input type="number" id="s-rate" step="0.0001" min="0" required></label>
         <label>Monthly service charge (GH₵) <input type="number" id="s-service" step="0.01" min="0" required></label>
         <label>Monthly budget (GH₵, optional) <input type="number" id="s-budget" step="0.01" min="0"></label>
+        <label>Low-balance alert: days left below <input type="number" id="s-alert-days" step="0.5" min="0"></label>
+        <label>…or units left below (kWh, optional) <input type="number" id="s-alert-kwh" step="0.1" min="0"></label>
+        <label class="check"><input type="checkbox" id="s-notify"> Also show a phone/browser notification when low</label>
         <button type="submit">Save settings</button>
       </form>
       <p class="muted">Check the current PURC/ECG tariff for your customer class and enter it here — rates change over time. Costs shown are estimates.</p>

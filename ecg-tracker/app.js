@@ -2,7 +2,7 @@
   "use strict";
   const KEY = "ecg-tracker-v1";
   const DAY = 86400000;
-  const defaults = { rate: 1.9, service: 0, budget: "", readings: [], topups: [], balances: [] };
+  const defaults = { rate: 1.9, service: 0, budget: "", readings: [], topups: [], balances: [], alertDays: 3, alertKwh: "", notify: false, lastAlert: "" };
   let state = load();
 
   const $ = (id) => document.getElementById(id);
@@ -105,6 +105,26 @@
     ].sort((x, y) => y.date.localeCompare(x.date));
   }
 
+  function renderAlert() {
+    const p = prepaidBalance(), box = $("alert");
+    let msg = "";
+    if (p && state.balances.length + state.topups.length) {
+      const days = Number(state.alertDays) || 0, kwh = Number(state.alertKwh) || 0;
+      const bal = Math.max(0, p.balance);
+      if (p.balance <= 0) msg = "Your prepaid balance is estimated at 0 kWh — top up now.";
+      else if (kwh && bal < kwh) msg = `Low balance: about ${fmt(bal)} kWh left (below your ${fmt(kwh)} kWh alert).`;
+      else if (days && p.daysLeft != null && p.daysLeft < days) msg = `Low balance: about ${fmt(p.daysLeft, 1)} day(s) left at your current usage (${fmt(bal)} kWh). Top up soon.`;
+    }
+    box.hidden = !msg; box.textContent = msg;
+    box.classList.toggle("warn", !!msg && p.balance > 0);
+    // At most one system notification per day, only while the app is open.
+    if (msg && state.notify && "Notification" in window && Notification.permission === "granted" && state.lastAlert !== today()) {
+      state.lastAlert = today();
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
+      try { new Notification("ECG balance low", { body: msg, icon: "icon-192.png" }); } catch {}
+    }
+  }
+
   function renderHistory() {
     const all = historyRows();
     const sel = $("h-month"), cur = sel.value;
@@ -155,7 +175,7 @@
       || `<tr><td colspan="5" class="muted">No top-ups yet</td></tr>`;
   }
 
-  function render() { renderStats(); renderBalance(); renderChart(); renderTables(); renderHistory(); }
+  function render() { renderStats(); renderBalance(); renderAlert(); renderChart(); renderTables(); renderHistory(); }
 
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
@@ -197,6 +217,10 @@
   $("settings-form").addEventListener("submit", (e) => {
     e.preventDefault();
     state.rate = parseFloat($("s-rate").value); state.service = parseFloat($("s-service").value) || 0; state.budget = $("s-budget").value;
+    state.alertDays = $("s-alert-days").value; state.alertKwh = $("s-alert-kwh").value;
+    state.notify = $("s-notify").checked;
+    if (state.notify && "Notification" in window && Notification.permission === "default") Notification.requestPermission().then(render);
+    else if (state.notify && !("Notification" in window)) alert("This browser doesn't support notifications; the in-app banner will still show.");
     save();
   });
   document.addEventListener("click", (e) => {
@@ -216,8 +240,12 @@
     if (confirm("Delete ALL readings, top-ups and settings? This cannot be undone.")) { state = Object.assign({}, defaults, { readings: [], topups: [], balances: [] }); fillSettings(); save(); }
   });
 
-  function fillSettings() { $("s-rate").value = state.rate; $("s-service").value = state.service; $("s-budget").value = state.budget; }
+  function fillSettings() { $("s-alert-days").value = state.alertDays; $("s-alert-kwh").value = state.alertKwh; $("s-notify").checked = !!state.notify; $("s-rate").value = state.rate; $("s-service").value = state.service; $("s-budget").value = state.budget; }
   $("r-date").value = $("t-date").value = $("b-date").value = today();
   fillSettings(); render();
   window.addEventListener("resize", renderChart);
+
+  const setOffline = () => { $("offline").hidden = navigator.onLine; };
+  window.addEventListener("online", setOffline); window.addEventListener("offline", setOffline); setOffline();
+  if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => {});
 })();
