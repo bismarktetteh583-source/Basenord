@@ -1,0 +1,26 @@
+:root{--bg:#f5f7fa;--card:#fff;--text:#1b2430;--muted:#6b7686;--accent:#f5a623;--accent-d:#c97f00;--green:#0a8f4d;--red:#c62828;--line:#e3e8ef}
+@media (prefers-color-scheme:dark){:root{--bg:#10151c;--card:#1a212b;--text:#e8edf3;--muted:#8d99a8;--line:#2a3441}}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--text)}
+header{background:linear-gradient(135deg,#1c2a3a,#2d4a6b);color:#fff;padding:20px 16px}
+header h1{margin:0;font-size:1.5rem}.sub{margin:4px 0 0;opacity:.8;font-size:.9rem}
+main{max-width:1000px;margin:0 auto;padding:16px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.card,.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.panel{margin-bottom:16px}.card .label{color:var(--muted);font-size:.8rem}.card .value{font-size:1.5rem;font-weight:700}
+.card .note{font-size:.8rem;color:var(--muted)}.over{color:var(--red)}.ok{color:var(--green)}
+h2{margin:0 0 10px;font-size:1.05rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}.grid.two{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.grid .panel{margin:0}
+label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:10px}
+input{display:block;width:100%;margin-top:3px;padding:9px;font-size:1rem;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text)}
+button{background:var(--accent);color:#1b1b1b;border:0;border-radius:8px;padding:10px 16px;font-size:1rem;font-weight:600;cursor:pointer}
+button:hover{background:var(--accent-d);color:#fff}button.danger{background:var(--red);color:#fff}
+button.del{background:none;color:var(--red);padding:0 6px}
+.muted{color:var(--muted);font-size:.8rem}
+.table-wrap{overflow-x:auto;max-height:340px;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--card)}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+canvas{width:100%}
