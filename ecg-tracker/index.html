@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ECG Usage Tracker</title>
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#1c2a3a">
+</head>
+<body>
+<header>
+  <h1>⚡ ECG Usage Tracker</h1>
+  <p class="sub">Track your Electricity Company of Ghana consumption and spend</p>
+</header>
+
+<main>
+  <div id="alert" class="alert" role="alert" hidden></div>
+  <div id="offline" class="muted" hidden>Offline — your data is saved on this device.</div>
+  <section class="cards" id="stats"></section>
+
+  <section class="panel">
+    <h2>Usage (last 30 days)</h2>
+    <canvas id="chart" height="160"></canvas>
+    <p id="chart-empty" class="muted" hidden>Add at least two meter readings to see usage.</p>
+  </section>
+
+  <section class="panel" id="balance-panel">
+    <h2>Prepaid remaining balance</h2>
+    <div id="balance-box"></div>
+    <form id="balance-form" class="inline">
+      <label>Date <input type="date" id="b-date" required></label>
+      <label>Units showing on meter (kWh) <input type="number" id="b-units" step="0.01" min="0" required></label>
+      <button type="submit">Calibrate balance</button>
+    </form>
+    <p class="muted">Estimated balance = last calibration (or 0) + top-ups since − usage since. Enter what your meter shows now to correct any drift.</p>
+  </section>
+
+  <div class="grid">
+    <section class="panel">
+      <h2>Add meter reading</h2>
+      <form id="reading-form">
+        <label>Date <input type="date" id="r-date" required></label>
+        <label>Meter reading (kWh / units) <input type="number" id="r-value" step="0.01" min="0" required></label>
+        <button type="submit">Save reading</button>
+      </form>
+      <p class="muted">Tip: read your meter at the same time each day for accurate daily usage. Prepaid? Press the meter's “remaining units” button and also log your top-ups below.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Add prepaid top-up</h2>
+      <form id="topup-form">
+        <label>Date <input type="date" id="t-date" required></label>
+        <label>Amount paid (GH₵) <input type="number" id="t-amount" step="0.01" min="0" required></label>
+        <label>Units received (kWh) <input type="number" id="t-units" step="0.01" min="0" required></label>
+        <button type="submit">Save top-up</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Settings</h2>
+      <form id="settings-form">
+        <label>Tariff (GH₵ per kWh) <input type="number" id="s-rate" step="0.0001" min="0" required></label>
+        <label>Monthly service charge (GH₵) <input type="number" id="s-service" step="0.01" min="0" required></label>
+        <label>Monthly budget (GH₵, optional) <input type="number" id="s-budget" step="0.01" min="0"></label>
+        <label>Low-balance alert: days left below <input type="number" id="s-alert-days" step="0.5" min="0"></label>
+        <label>…or units left below (kWh, optional) <input type="number" id="s-alert-kwh" step="0.1" min="0"></label>
+        <label class="check"><input type="checkbox" id="s-notify"> Also show a phone/browser notification when low</label>
+        <button type="submit">Save settings</button>
+      </form>
+      <p class="muted">Check the current PURC/ECG tariff for your customer class and enter it here — rates change over time. Costs shown are estimates.</p>
+    </section>
+  </div>
+
+  <section class="panel">
+    <h2>Monthly summary</h2>
+    <div class="table-wrap"><table id="months"><thead><tr><th>Month</th><th>kWh used</th><th>Est. cost (GH₵)</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <div class="grid two">
+    <section class="panel">
+      <h2>Readings</h2>
+      <div class="table-wrap"><table id="readings"><thead><tr><th>Date</th><th>Reading</th><th>Used since previous</th><th></th></tr></thead><tbody></tbody></table></div>
+    </section>
+    <section class="panel">
+      <h2>Top-ups</h2>
+      <div class="table-wrap"><table id="topups"><thead><tr><th>Date</th><th>GH₵</th><th>kWh</th><th>GH₵/kWh</th><th></th></tr></thead><tbody></tbody></table></div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <h2>History of past tracking</h2>
+    <div class="filters">
+      <select id="h-type"><option value="">All records</option><option value="reading">Readings</option><option value="topup">Top-ups</option><option value="balance">Balance checks</option></select>
+      <select id="h-month"><option value="">All months</option></select>
+    </div>
+    <div class="table-wrap"><table id="history"><thead><tr><th>Date</th><th>Type</th><th>Details</th><th></th></tr></thead><tbody></tbody></table></div>
+    <p id="h-count" class="muted"></p>
+  </section>
+
+  <section class="panel actions">
+    <button id="backup">Backup (JSON)</button>
+    <button id="restore">Restore backup</button>
+    <input type="file" id="restore-file" accept="application/json" hidden>
+    <button id="export">Export CSV</button>
+    <button id="clear" class="danger">Clear all data</button>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
