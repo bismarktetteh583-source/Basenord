@@ -2,7 +2,7 @@
   "use strict";
   const KEY = "ecg-tracker-v1";
   const DAY = 86400000;
-  const defaults = { rate: 1.9, service: 0, budget: "", readings: [], topups: [] };
+  const defaults = { rate: 1.9, service: 0, budget: "", readings: [], topups: [], balances: [] };
   let state = load();
 
   const $ = (id) => document.getElementById(id);
@@ -72,6 +72,51 @@
     $("stats").innerHTML = cards.map(([l, v, n]) => `<div class="card"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${n}</div></div>`).join("");
   }
 
+  // Estimated prepaid balance: last calibration (or 0) + top-ups since - usage since.
+  function prepaidBalance() {
+    if (!state.topups.length && !state.balances.length) return null;
+    const check = [...state.balances].sort((x, y) => x.date.localeCompare(y.date)).pop();
+    const since = check ? check.date : "";
+    const bought = state.topups.filter((t) => t.date > since).reduce((s, t) => s + t.units, 0);
+    const used = Object.entries(dailyUsage()).filter(([d]) => d > since).reduce((s, [, k]) => s + k, 0);
+    const days = Object.keys(dailyUsage()).sort().slice(-7);
+    const avg = days.length ? days.reduce((s, d) => s + dailyUsage()[d], 0) / days.length : 0;
+    const balance = (check ? check.units : 0) + bought - used;
+    return { balance, bought, used, check, avg, daysLeft: avg > 0 && balance > 0 ? balance / avg : null };
+  }
+
+  function renderBalance() {
+    const p = prepaidBalance();
+    if (!p) { $("balance-box").innerHTML = `<p class="muted">Log a top-up or calibrate your meter balance to see your remaining units.</p>`; return; }
+    const low = p.balance <= 0 ? "over" : p.daysLeft != null && p.daysLeft < 3 ? "over" : "ok";
+    const cards = [
+      ["Estimated remaining", `<span class="${low}">${fmt(Math.max(0, p.balance))} kWh</span>`, p.check ? `calibrated ${p.check.date} at ${fmt(p.check.units)} kWh` : "no calibration yet"],
+      ["Days left", p.daysLeft != null ? fmt(p.daysLeft, 1) : "—", p.avg ? `at ${fmt(p.avg)} kWh/day` : "needs 2+ readings"],
+      ["Value remaining", `GH₵ ${fmt(Math.max(0, p.balance) * state.rate)}`, "at your tariff"],
+    ];
+    $("balance-box").innerHTML = cards.map(([l, v, n]) => `<div class="card"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${n}</div></div>`).join("");
+  }
+
+  function historyRows() {
+    return [
+      ...state.readings.map((r) => ({ id: r.id, list: "readings", type: "reading", date: r.date, text: `Meter reading ${fmt(r.value)} kWh` })),
+      ...state.topups.map((t) => ({ id: t.id, list: "topups", type: "topup", date: t.date, text: `Top-up GH₵ ${fmt(t.amount)} → ${fmt(t.units)} kWh` })),
+      ...state.balances.map((b) => ({ id: b.id, list: "balances", type: "balance", date: b.date, text: `Meter balance ${fmt(b.units)} kWh` })),
+    ].sort((x, y) => y.date.localeCompare(x.date));
+  }
+
+  function renderHistory() {
+    const all = historyRows();
+    const sel = $("h-month"), cur = sel.value;
+    const months = [...new Set(all.map((r) => r.date.slice(0, 7)))].sort().reverse();
+    sel.innerHTML = `<option value="">All months</option>` + months.map((m) => `<option ${m === cur ? "selected" : ""}>${m}</option>`).join("");
+    const type = $("h-type").value, month = sel.value;
+    const rows = all.filter((r) => (!type || r.type === type) && (!month || r.date.startsWith(month)));
+    const label = { reading: "Reading", topup: "Top-up", balance: "Balance" };
+    $("history").tBodies[0].innerHTML = rows.map((r) => `<tr><td>${r.date}</td><td><span class="tag">${label[r.type]}</span></td><td>${r.text}</td><td><button class="del" data-del="${r.list}" data-id="${r.id}" title="Delete">✕</button></td></tr>`).join("") || `<tr><td colspan="4" class="muted">No records</td></tr>`;
+    $("h-count").textContent = `${rows.length} of ${all.length} records`;
+  }
+
   function renderChart() {
     const daily = dailyUsage();
     const end = toTime(today());
@@ -110,7 +155,7 @@
       || `<tr><td colspan="5" class="muted">No top-ups yet</td></tr>`;
   }
 
-  function render() { renderStats(); renderChart(); renderTables(); }
+  function render() { renderStats(); renderBalance(); renderChart(); renderTables(); renderHistory(); }
 
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
@@ -126,6 +171,29 @@
     state.topups.push({ id: uid(), date: $("t-date").value, amount: parseFloat($("t-amount").value), units: parseFloat($("t-units").value) });
     e.target.reset(); $("t-date").value = today(); save();
   });
+  $("balance-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    state.balances.push({ id: uid(), date: $("b-date").value, units: parseFloat($("b-units").value) });
+    $("b-units").value = ""; save();
+  });
+  $("h-type").addEventListener("change", renderHistory);
+  $("h-month").addEventListener("change", renderHistory);
+  $("backup").addEventListener("click", () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: "application/json" }));
+    a.download = `ecg-backup-${today()}.json`; a.click(); URL.revokeObjectURL(a.href);
+  });
+  $("restore").addEventListener("click", () => $("restore-file").click());
+  $("restore-file").addEventListener("change", async (e) => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    try {
+      const d = JSON.parse(await f.text());
+      if (!Array.isArray(d.readings) || !Array.isArray(d.topups)) throw new Error("bad file");
+      if (!confirm("Replace current data with this backup?")) return;
+      state = Object.assign({}, defaults, d, { balances: Array.isArray(d.balances) ? d.balances : [] });
+      fillSettings(); save();
+    } catch { alert("That file isn't a valid ECG tracker backup."); }
+  });
   $("settings-form").addEventListener("submit", (e) => {
     e.preventDefault();
     state.rate = parseFloat($("s-rate").value); state.service = parseFloat($("s-service").value) || 0; state.budget = $("s-budget").value;
@@ -138,17 +206,18 @@
   $("export").addEventListener("click", () => {
     const rows = [["type", "date", "reading_kwh", "amount_ghs", "units_kwh"]];
     state.readings.forEach((r) => rows.push(["reading", r.date, r.value, "", ""]));
+    state.balances.forEach((b) => rows.push(["balance", b.date, "", "", b.units]));
     state.topups.forEach((t) => rows.push(["topup", t.date, "", t.amount, t.units]));
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([rows.map((r) => r.join(",")).join("\n")], { type: "text/csv" }));
     a.download = "ecg-usage.csv"; a.click(); URL.revokeObjectURL(a.href);
   });
   $("clear").addEventListener("click", () => {
-    if (confirm("Delete ALL readings, top-ups and settings? This cannot be undone.")) { state = Object.assign({}, defaults, { readings: [], topups: [] }); fillSettings(); save(); }
+    if (confirm("Delete ALL readings, top-ups and settings? This cannot be undone.")) { state = Object.assign({}, defaults, { readings: [], topups: [], balances: [] }); fillSettings(); save(); }
   });
 
   function fillSettings() { $("s-rate").value = state.rate; $("s-service").value = state.service; $("s-budget").value = state.budget; }
-  $("r-date").value = $("t-date").value = today();
+  $("r-date").value = $("t-date").value = $("b-date").value = today();
   fillSettings(); render();
   window.addEventListener("resize", renderChart);
 })();

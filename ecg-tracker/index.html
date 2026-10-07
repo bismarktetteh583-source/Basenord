@@ -21,6 +21,17 @@
     <p id="chart-empty" class="muted" hidden>Add at least two meter readings to see usage.</p>
   </section>
 
+  <section class="panel" id="balance-panel">
+    <h2>Prepaid remaining balance</h2>
+    <div id="balance-box"></div>
+    <form id="balance-form" class="inline">
+      <label>Date <input type="date" id="b-date" required></label>
+      <label>Units showing on meter (kWh) <input type="number" id="b-units" step="0.01" min="0" required></label>
+      <button type="submit">Calibrate balance</button>
+    </form>
+    <p class="muted">Estimated balance = last calibration (or 0) + top-ups since − usage since. Enter what your meter shows now to correct any drift.</p>
+  </section>
+
   <div class="grid">
     <section class="panel">
       <h2>Add meter reading</h2>
@@ -70,7 +81,20 @@
     </section>
   </div>
 
+  <section class="panel">
+    <h2>History of past tracking</h2>
+    <div class="filters">
+      <select id="h-type"><option value="">All records</option><option value="reading">Readings</option><option value="topup">Top-ups</option><option value="balance">Balance checks</option></select>
+      <select id="h-month"><option value="">All months</option></select>
+    </div>
+    <div class="table-wrap"><table id="history"><thead><tr><th>Date</th><th>Type</th><th>Details</th><th></th></tr></thead><tbody></tbody></table></div>
+    <p id="h-count" class="muted"></p>
+  </section>
+
   <section class="panel actions">
+    <button id="backup">Backup (JSON)</button>
+    <button id="restore">Restore backup</button>
+    <input type="file" id="restore-file" accept="application/json" hidden>
     <button id="export">Export CSV</button>
     <button id="clear" class="danger">Clear all data</button>
   </section>
