@@ -32,3 +32,4 @@ form.inline{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}form.inlin
 .alert{background:var(--red);color:#fff;padding:12px 14px;border-radius:12px;margin-bottom:16px;font-weight:600}
 .alert.warn{background:var(--accent);color:#1b1b1b}
 label.check{display:flex;gap:8px;align-items:center;color:var(--text)}label.check input{width:auto;margin:0}
+[hidden]{display:none!important}

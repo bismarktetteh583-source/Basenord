@@ -2,6 +2,7 @@
 
 A simple, offline-friendly web app for tracking Electricity Company of Ghana (ECG) usage.
 
+- **Cedi mode** (default): log what you paid and the remaining credit (GHC) your meter shows; set an alert level such as GH₵400; the app estimates days until you reach it from your spending trend. kWh mode is still available in Settings.
 - Log meter readings (cumulative kWh) **or** remaining-balance checks from a prepaid meter → daily/monthly kWh and estimated cost
 - Log prepaid top-ups (GH₵ paid vs units received, effective rate)
 - 30-day usage chart, projected monthly bill, optional monthly budget
