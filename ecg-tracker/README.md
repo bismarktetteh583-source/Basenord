@@ -2,7 +2,7 @@
 
 A simple, offline-friendly web app for tracking Electricity Company of Ghana (ECG) usage.
 
-- Log meter readings → daily/monthly kWh and estimated cost
+- Log meter readings (cumulative kWh) **or** remaining-balance checks from a prepaid meter → daily/monthly kWh and estimated cost
 - Log prepaid top-ups (GH₵ paid vs units received, effective rate)
 - 30-day usage chart, projected monthly bill, optional monthly budget
 - Prepaid remaining balance (top-ups − usage, with calibration to your meter's displayed units) and days left

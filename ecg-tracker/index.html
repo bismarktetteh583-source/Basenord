@@ -24,7 +24,7 @@
   <section class="panel">
     <h2>Usage (last 30 days)</h2>
     <canvas id="chart" height="160"></canvas>
-    <p id="chart-empty" class="muted" hidden>Add at least two meter readings to see usage.</p>
+    <p id="chart-empty" class="muted" hidden>Add at least two meter readings or two remaining-balance checks to see usage.</p>
   </section>
 
   <section class="panel" id="balance-panel">
@@ -35,12 +35,12 @@
       <label>Units showing on meter (kWh) <input type="number" id="b-units" step="0.01" min="0" required></label>
       <button type="submit">Calibrate balance</button>
     </form>
-    <p class="muted">Estimated balance = last calibration (or 0) + top-ups since − usage since. Enter what your meter shows now to correct any drift.</p>
+    <p class="muted">Check your meter every day or two and enter the remaining units it shows. The app works out your usage from the drop between checks (adding any top-ups you logged), so you do not need a total reading.</p>
   </section>
 
   <div class="grid">
     <section class="panel">
-      <h2>Add meter reading</h2>
+      <h2>Add meter reading <span class="muted">(only if your meter shows a total kWh)</span></h2>
       <form id="reading-form">
         <label>Date <input type="date" id="r-date" required></label>
         <label>Meter reading (kWh / units) <input type="number" id="r-value" step="0.01" min="0" required></label>
