@@ -25,19 +25,33 @@
     return sorted.map((r, i) => ({ ...r, used: i ? r.value - sorted[i - 1].value : null, prev: i ? sorted[i - 1] : null }));
   }
 
-  // Spread each interval's usage evenly over the days it covers -> {date: kWh}
-  function dailyUsage() {
-    const out = {};
-    for (const r of readingsWithUsage()) {
-      if (r.used == null || r.used < 0) continue;
-      const start = toTime(r.prev.date), end = toTime(r.date);
-      const days = Math.max(1, Math.round((end - start) / DAY));
-      for (let i = 1; i <= days; i++) {
-        const d = new Date(start + i * DAY).toISOString().slice(0, 10);
-        out[d] = (out[d] || 0) + r.used / days;
-      }
+  // Usage between consecutive remaining-balance checks: previous balance + top-ups in (prev, this] - this balance.
+  function balanceIntervals() {
+    const sorted = [...state.balances].sort((a, b) => a.date.localeCompare(b.date));
+    return sorted.map((b, i) => {
+      if (!i) return { ...b, used: null, prev: null };
+      const prev = sorted[i - 1];
+      const bought = state.topups.filter((t) => t.date > prev.date && t.date <= b.date).reduce((s, t) => s + t.units, 0);
+      return { ...b, prev, used: prev.units + bought - b.units };
+    });
+  }
+
+  // Spread an interval's usage evenly over the days it covers, adding into out.
+  function spread(out, prevDate, date, used) {
+    const start = toTime(prevDate), end = toTime(date);
+    const days = Math.max(1, Math.round((end - start) / DAY));
+    for (let i = 1; i <= days; i++) {
+      const d = new Date(start + i * DAY).toISOString().slice(0, 10);
+      out[d] = (out[d] || 0) + used / days;
     }
-    return out;
+  }
+
+  // Daily usage {date: kWh}. Meter readings win on days they cover; balance checks fill the rest.
+  function dailyUsage() {
+    const fromReadings = {}, fromBalances = {};
+    for (const r of readingsWithUsage()) if (r.used != null && r.used >= 0) spread(fromReadings, r.prev.date, r.date, r.used);
+    for (const b of balanceIntervals()) if (b.used != null && b.used >= 0) spread(fromBalances, b.prev.date, b.date, b.used);
+    return Object.assign({}, fromBalances, fromReadings);
   }
 
   function monthlyUsage() {
@@ -78,9 +92,13 @@
     const check = [...state.balances].sort((x, y) => x.date.localeCompare(y.date)).pop();
     const since = check ? check.date : "";
     const bought = state.topups.filter((t) => t.date > since).reduce((s, t) => s + t.units, 0);
-    const used = Object.entries(dailyUsage()).filter(([d]) => d > since).reduce((s, [, k]) => s + k, 0);
-    const days = Object.keys(dailyUsage()).sort().slice(-7);
-    const avg = days.length ? days.reduce((s, d) => s + dailyUsage()[d], 0) / days.length : 0;
+    const daily = dailyUsage(), dates = Object.keys(daily).sort();
+    const recent = dates.slice(-7);
+    const avg = recent.length ? recent.reduce((s, d) => s + daily[d], 0) / recent.length : 0;
+    // Known usage after the check, plus the average for days not yet covered by a reading/check.
+    let used = dates.filter((d) => d > since).reduce((s, d) => s + daily[d], 0);
+    const coveredTo = [since, dates[dates.length - 1] || ""].sort().pop();
+    if (coveredTo) used += avg * Math.max(0, Math.round((toTime(today()) - toTime(coveredTo)) / DAY));
     const balance = (check ? check.units : 0) + bought - used;
     return { balance, bought, used, check, avg, daysLeft: avg > 0 && balance > 0 ? balance / avg : null };
   }
@@ -101,7 +119,7 @@
     return [
       ...state.readings.map((r) => ({ id: r.id, list: "readings", type: "reading", date: r.date, text: `Meter reading ${fmt(r.value)} kWh` })),
       ...state.topups.map((t) => ({ id: t.id, list: "topups", type: "topup", date: t.date, text: `Top-up GH₵ ${fmt(t.amount)} → ${fmt(t.units)} kWh` })),
-      ...state.balances.map((b) => ({ id: b.id, list: "balances", type: "balance", date: b.date, text: `Meter balance ${fmt(b.units)} kWh` })),
+      ...balanceIntervals().map((b) => ({ id: b.id, list: "balances", type: "balance", date: b.date, text: `Meter balance ${fmt(b.units)} kWh` + (b.used == null ? "" : b.used < 0 ? " (balance went up: missing top-up?)" : ` (used ${fmt(b.used)} kWh since ${b.prev.date})`) })),
     ].sort((x, y) => y.date.localeCompare(x.date));
   }
 
