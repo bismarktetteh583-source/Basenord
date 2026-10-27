@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BaseNord Membership Tracker</title>
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0b2a5b">
+</head>
+<body>
+<header>
+  <h1>BaseNord Membership Tracker</h1>
+  <p class="sub">Know when every package ends and get reminded before it does</p>
+</header>
+
+<main>
+  <div id="alert" class="alert" role="alert" hidden></div>
+  <section class="cards" id="stats"></section>
+
+  <section class="panel">
+    <h2 id="form-title">Add a member / booking</h2>
+    <form id="member-form">
+      <div class="row">
+        <label>Name / company <input id="m-name" required></label>
+        <label>Phone (optional) <input id="m-phone" type="tel"></label>
+        <label>Package <select id="m-pkg" required></select></label>
+      </div>
+      <div class="row">
+        <label>Start date <input type="date" id="m-start" required></label>
+        <label>Length <input type="number" id="m-count" min="1" step="1" required></label>
+        <label>Unit <select id="m-unit"><option value="day">Days</option><option value="week">Weeks</option><option value="month">Months</option></select></label>
+        <label>Amount paid (GH₵, optional) <input type="number" id="m-price" min="0" step="0.01"></label>
+      </div>
+      <label>Notes (optional) <input id="m-notes"></label>
+      <p class="muted" id="m-end-preview"></p>
+      <div class="actions">
+        <button type="submit" id="m-submit">Save</button>
+        <button type="button" class="ghost" id="m-cancel" hidden>Cancel edit</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Members</h2>
+    <div class="filters">
+      <input id="f-search" type="search" placeholder="Search name or phone">
+      <select id="f-status">
+        <option value="all">All</option>
+        <option value="soon">Ending soon</option>
+        <option value="active">Active</option>
+        <option value="expired">Expired</option>
+      </select>
+      <select id="f-pkg"></select>
+    </div>
+    <div class="list" id="list"></div>
+    <p class="muted" id="list-empty" hidden>No members yet. Add one above.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Packages</h2>
+    <p class="muted">Add or change the packages you offer. Prices are for reference and prefill the form.</p>
+    <div class="list" id="pkg-list"></div>
+    <form id="pkg-form" style="margin-top:12px">
+      <div class="row">
+        <label>Package name <input id="p-name" required></label>
+        <label>Default length <input type="number" id="p-count" min="1" step="1" value="1" required></label>
+        <label>Unit <select id="p-unit"><option value="day">Days</option><option value="week">Weeks</option><option value="month" selected>Months</option></select></label>
+        <label>Price (GH₵, optional) <input type="number" id="p-price" min="0" step="0.01"></label>
+      </div>
+      <div class="actions">
+        <button type="submit" id="p-submit">Add package</button>
+        <button type="button" class="ghost" id="p-cancel" hidden>Cancel edit</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Reminders</h2>
+    <label>Remind me this many days before a package ends (comma separated, 0 = on the last day)
+      <input id="s-remind" placeholder="7, 3, 1, 0"></label>
+    <label class="check"><input type="checkbox" id="s-notify"> Show phone notifications when I open the app</label>
+    <div class="actions">
+      <button id="s-save">Save reminders</button>
+      <button class="ghost" id="ics">Download calendar reminders (.ics)</button>
+      <button class="ghost" id="export">Backup (JSON)</button>
+      <button class="ghost" id="import">Restore</button>
+      <input type="file" id="import-file" accept="application/json" hidden>
+    </div>
+    <p class="muted">The app can only notify while it is open or recently used, because it has no server. For reminders that always arrive, import the .ics file into your phone's calendar (Google/Apple Calendar): each ending date gets alarms at your chosen days.</p>
+    <p class="muted">A package ends on its last included day: a monthly package starting 1 Jan ends 31 Jan; a weekly one starting Monday ends Sunday. All data stays on this device.</p>
+  </section>
+</main>
+<script src="app.js"></script>
+<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});</script>
+</body>
+</html>
