@@ -31,7 +31,7 @@
       <div class="row">
         <label>Start date <input type="date" id="m-start" required></label>
         <label>Length <input type="number" id="m-count" min="1" step="1" required></label>
-        <label>Unit <select id="m-unit"><option value="day">Days</option><option value="week">Weeks</option><option value="month">Months</option></select></label>
+        <label>Unit <select id="m-unit"><option value="day">Working days (Mon–Fri)</option><option value="week">Weeks (5 working days)</option><option value="month">Months</option></select></label>
         <label>Amount paid (GH₵, optional) <input type="number" id="m-price" min="0" step="0.01"></label>
       </div>
       <label>Notes (optional) <input id="m-notes"></label>
@@ -67,7 +67,7 @@
       <div class="row">
         <label>Package name <input id="p-name" required></label>
         <label>Default length <input type="number" id="p-count" min="1" step="1" value="1" required></label>
-        <label>Unit <select id="p-unit"><option value="day">Days</option><option value="week">Weeks</option><option value="month" selected>Months</option></select></label>
+        <label>Unit <select id="p-unit"><option value="day">Working days (Mon–Fri)</option><option value="week">Weeks (5 working days)</option><option value="month" selected>Months</option></select></label>
         <label>Price (GH₵, optional) <input type="number" id="p-price" min="0" step="0.01"></label>
       </div>
       <div class="actions">
@@ -79,8 +79,8 @@
 
   <section class="panel">
     <h2>Reminders</h2>
-    <label>Remind me this many days before a package ends (comma separated, 0 = on the last day)
-      <input id="s-remind" placeholder="7, 3, 1, 0"></label>
+    <label>Remind me this many working days before a package ends (comma separated, 0 = on the last day)
+      <input id="s-remind" placeholder="2"></label>
     <label class="check"><input type="checkbox" id="s-notify"> Show phone notifications when I open the app</label>
     <div class="actions">
       <button id="s-save">Save reminders</button>
@@ -90,7 +90,7 @@
       <input type="file" id="import-file" accept="application/json" hidden>
     </div>
     <p class="muted">The app can only notify while it is open or recently used, because it has no server. For reminders that always arrive, import the .ics file into your phone's calendar (Google/Apple Calendar): each ending date gets alarms at your chosen days.</p>
-    <p class="muted">A package ends on its last included day: a monthly package starting 1 Jan ends 31 Jan; a weekly one starting Monday ends Sunday. All data stays on this device.</p>
+    <p class="muted">Weekends are never counted. Days and weeks count working days only (a week = 5 working days, so a weekly package starting Monday ends Friday). A monthly package runs to the same date next month and ends on the last working day on or before it. A start date on a weekend begins the next Monday. All data stays on this device.</p>
   </section>
 </main>
 <script src="app.js"></script>
