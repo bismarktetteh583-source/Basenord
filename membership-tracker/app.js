@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const KEY = "bn-members-v1";
-  const SOON_DAYS = 7;
+  const SOON_DAYS = 5; // working days
   const defaultPackages = [
     { id: "daily", name: "Daily Hot Desk", count: 1, unit: "day", price: 200 },
     { id: "weekly", name: "Weekly Hot Desk", count: 1, unit: "week", price: 800 },
@@ -12,7 +12,7 @@
     { id: "office-annual", name: "Private Office (annual)", count: 12, unit: "month", price: "" },
     { id: "office-biannual", name: "Private Office (bi-annual)", count: 6, unit: "month", price: "" },
   ];
-  const defaults = { packages: defaultPackages, members: [], remind: [7, 3, 1, 0], notify: false, sent: {} };
+  const defaults = { packages: defaultPackages, members: [], remind: [2], notify: false, sent: {} };
   let state = load();
   let editingMember = null, editingPkg = null;
 
@@ -34,10 +34,23 @@
     const last = new Date(Date.UTC(ny, nm + 1, 0)).getUTCDate();
     return iso(Date.UTC(ny, nm, Math.min(d, last)));
   }
-  // Last included day of a package.
+  // ---- working days (Mon-Fri only; weekends are never counted) ----
+  const isWeekend = (s) => { const w = new Date(ms(s)).getUTCDay(); return w === 0 || w === 6; };
+  const nextWD = (s) => { while (isWeekend(s)) s = addDays(s, 1); return s; };   // same day if already a weekday
+  const prevWD = (s) => { while (isWeekend(s)) s = addDays(s, -1); return s; };
+  function addWorkdays(s, n) { while (n > 0) { s = addDays(s, 1); if (!isWeekend(s)) n--; } return s; }
+  function subWorkdays(s, n) { while (n > 0) { s = addDays(s, -1); if (!isWeekend(s)) n--; } return s; }
+  // Number of working days after a, up to and including b (a <= b).
+  function workdaysAfter(a, b) { let n = 0; for (let d = addDays(a, 1); d <= b; d = addDays(d, 1)) if (!isWeekend(d)) n++; return n; }
+  // First counted day: a weekend start moves to Monday.
+  const effectiveStart = (start) => nextWD(start);
+  // Last included working day of a package.
+  //  - Days: working days. Weeks: 5 working days each.
+  //  - Months: calendar months, ending on the last working day on or before the calendar end date.
   function endDate(start, count, unit) {
-    const next = unit === "month" ? addMonths(start, count) : addDays(start, count * (unit === "week" ? 7 : 1));
-    return addDays(next, -1);
+    const s = effectiveStart(start);
+    if (unit === "month") return prevWD(addDays(addMonths(s, count), -1));
+    return addWorkdays(s, count * (unit === "week" ? 5 : 1) - 1);
   }
   const daysBetween = (a, b) => Math.round((ms(b) - ms(a)) / 86400000);
   const pretty = (s) => new Date(ms(s)).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
@@ -45,6 +58,8 @@
   function load() {
     try {
       const saved = JSON.parse(localStorage.getItem(KEY));
+      // One-time switch from the old built-in reminder days (7, 3, 1, 0) to 2 working days before the end.
+      if (saved && Array.isArray(saved.remind) && saved.remind.join() === "7,3,1,0") saved.remind = [2];
       return saved ? Object.assign({}, defaults, saved) : structuredClone(defaults);
     } catch { return structuredClone(defaults); }
   }
@@ -55,17 +70,17 @@
 
   function enrich(m) {
     const end = endDate(m.start, m.count, m.unit);
-    const left = daysBetween(localToday(), end);
-    const status = left < 0 ? "expired" : left <= SOON_DAYS ? "soon" : "active";
+    const today = localToday();
+    const left = end >= today ? workdaysAfter(today, end) : -workdaysAfter(end, today); // working days
+    const status = end < today ? "expired" : left <= SOON_DAYS ? "soon" : "active";
     return { ...m, end, left, status };
   }
   const members = () => state.members.map(enrich).sort((a, b) => a.end.localeCompare(b.end));
 
   function leftText(m) {
-    if (m.left < 0) return `Expired ${unitLabel(-m.left, "day")} ago`;
+    if (m.status === "expired") return m.left === 0 ? "Expired" : `Expired ${unitLabel(-m.left, "working day")} ago`;
     if (m.left === 0) return "Ends today";
-    if (m.left === 1) return "Ends tomorrow";
-    return `${m.left} days left`;
+    return `${unitLabel(m.left, "working day")} left`;
   }
 
   // ---- rendering ----
@@ -77,7 +92,7 @@
     const ms_ = members();
     const c = (s) => ms_.filter((m) => m.status === s).length;
     const card = (label, value, cls = "") => `<div class="card"><div class="label">${label}</div><div class="value ${cls}">${value}</div></div>`;
-    $("stats").innerHTML = card("Active", c("active") + c("soon")) + card("Ending within 7 days", c("soon"), c("soon") ? "over" : "") + card("Expired", c("expired"), c("expired") ? "over" : "");
+    $("stats").innerHTML = card("Active", c("active") + c("soon")) + card("Ending within 5 working days", c("soon"), c("soon") ? "over" : "") + card("Expired", c("expired"), c("expired") ? "over" : "");
   }
 
   function renderBanner() {
@@ -142,7 +157,9 @@
 
   function updatePreview() {
     const s = $("m-start").value, n = +$("m-count").value;
-    $("m-end-preview").textContent = s && n > 0 ? `Ends on ${pretty(endDate(s, n, $("m-unit").value))}` : "";
+    $("m-end-preview").textContent = s && n > 0
+      ? (isWeekend(s) ? `Starts ${pretty(effectiveStart(s))} (next working day). ` : "") + `Ends on ${pretty(endDate(s, n, $("m-unit").value))}`
+      : "";
   }
 
   // ---- members ----
@@ -186,7 +203,7 @@
       if (confirm(`Delete ${m.name}?`)) { state.members = state.members.filter((x) => x !== m); save(); }
     } else if (b.dataset.act === "renew") {
       // New period starts the day after the current one ends (or today if it already lapsed longer ago).
-      const next = addDays(endDate(m.start, m.count, m.unit), 1);
+      const next = nextWD(addDays(endDate(m.start, m.count, m.unit), 1));
       m.start = next < localToday() && confirm("This lapsed a while ago. Start the renewal today instead of the day after it ended?") ? localToday() : next;
       save();
     } else {
@@ -259,12 +276,12 @@
     if (!state.notify || !("Notification" in window) || Notification.permission !== "granted") return;
     let changed = false;
     for (const m of members()) {
-      const hit = m.left < 0 ? "exp" : state.remind.filter((d) => m.left <= d).sort((a, b) => a - b)[0];
+      const hit = m.status === "expired" ? "exp" : state.remind.filter((d) => m.left <= d).sort((a, b) => a - b)[0];
       if (hit == null) continue;
       const key = `${m.id}|${m.end}|${hit}`;
       if (state.sent[key]) continue;
       state.sent[key] = 1; changed = true;
-      notify(m.left < 0 ? "Package expired" : "Package ending", `${m.name}: ${m.pkgName} — ${leftText(m).toLowerCase()} (${pretty(m.end)})`, key);
+      notify(m.status === "expired" ? "Package expired" : "Package ending", `${m.name}: ${m.pkgName} — ${leftText(m).toLowerCase()} (${pretty(m.end)})`, key);
     }
     if (changed) { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
   }
@@ -279,9 +296,10 @@
         `DTSTART;VALUE=DATE:${m.end.replace(/-/g, "")}`, `DTEND;VALUE=DATE:${addDays(m.end, 1).replace(/-/g, "")}`,
         `SUMMARY:${esc_(`Ends: ${m.name} – ${m.pkgName}`)}`, `DESCRIPTION:${esc_(`${m.name}${m.phone ? " " + m.phone : ""}. ${m.pkgName}, ${pretty(m.start)} to ${pretty(m.end)}.`)}`);
       for (const d of state.remind) {
-        lines.push("BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${esc_(`${m.name}: ${m.pkgName} ends ${d ? "in " + d + " day" + (d === 1 ? "" : "s") : "today"}`)}`,
-          // Alarm fires at 9am, d days before the end date.
-          d ? `TRIGGER:-PT${d * 24 - 9}H` : "TRIGGER:PT9H", "END:VALARM");
+        // d working days before the end date (always lands on a weekday), alarm at 9am.
+        const gap = daysBetween(subWorkdays(m.end, d), m.end);
+        lines.push("BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${esc_(`${m.name}: ${m.pkgName} ends ${d ? "in " + d + " working day" + (d === 1 ? "" : "s") : "today"}`)}`,
+          gap ? `TRIGGER:-PT${gap * 24 - 9}H` : "TRIGGER:PT9H", "END:VALARM");
       }
       lines.push("END:VEVENT");
     }
